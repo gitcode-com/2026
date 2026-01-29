@@ -1,0 +1,31 @@
+name: Manual Rollback Tool
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: '选择要回滚的服务'
+        required: true
+        default: 'payment-service'
+        type: choice
+        options:
+          - payment-service
+          - user-service
+          - order-service
+      target_version:
+        description: '回滚到的目标版本号 (e.g., v1.2.0)'
+        required: true
+        type: string
+      is_emergency:
+        description: '这是一次紧急回滚吗？'
+        type: boolean
+        default: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "正在回滚服务: ${{ inputs.service_name }}"
+          echo "目标版本: ${{ inputs.target_version }}"
+          echo "紧急状态: ${{ inputs.is_emergency }}"
