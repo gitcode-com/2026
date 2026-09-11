@@ -112,57 +112,64 @@
   /** 中文输入法选词进行中标记：选词期间 Enter 不触发发送 */
   var composing = false
 
-  /** 面板样式（注入 Shadow DOM，不污染宿主页面） */
+  /** 面板样式（注入 Shadow DOM，不污染宿主页面）：胶囊式输入条，对齐站内 dock-bottom-bar 视觉 */
   var DOCK_CSS = [
     ':host { all: initial; }',
     '.ac-dock {',
     '  position: fixed; left: 16px; top: 100vh; /* 初始位置由 JS 计算 */',
     '  width: 340px; max-width: calc(100vw - 24px);',
-    '  box-sizing: border-box; padding: 10px 12px 12px;',
-    '  background: #ffffff; border: 1px solid #e3e3ee; border-radius: 12px;',
-    '  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14);',
+    '  box-sizing: border-box; display: flex; align-items: center; gap: 8px;',
+    '  height: 52px; padding: 0 8px 0 14px;',
+    '  background: #ffffff; border: 1px solid #e2e5ed; border-radius: 999px;',
+    '  box-shadow: 0 12px 36px rgba(15, 17, 21, 0.14);',
     '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",',
     '    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;',
-    '  color: #24292f;',
+    '  color: #171a2b;',
     '}',
     '@media (max-width: 480px) {',
     '  .ac-dock { width: calc(100vw - 24px); }',
     '}',
     '.ac-brand {',
-    '  display: flex; align-items: center; gap: 6px;',
-    '  margin-bottom: 8px; font-size: 12px; font-weight: 600; color: #57606a;',
+    '  display: grid; place-items: center;',
+    '  width: 28px; height: 28px; flex: 0 0 auto;',
+    '  border-radius: 50%; background: #da203f; color: #ffffff;',
     '  user-select: none;',
     '}',
-    '.ac-logo {',
-    '  width: 16px; height: 16px; border-radius: 4px; flex: none;',
-    '  background: linear-gradient(135deg, #3b82f6, #8b5cf6);',
+    '.ac-brand svg { width: 15px; height: 15px; }',
+    '.ac-input {',
+    '  min-width: 0; flex: 1; height: 100%;',
+    '  border: 0; outline: 0; background: transparent;',
+    '  font: inherit; font-size: 14px; color: #171a2b;',
     '}',
-    '.ac-textarea {',
-    '  display: block; width: 100%; box-sizing: border-box;',
-    '  height: 64px; resize: none; padding: 8px 10px;',
-    '  border: 1px solid #d0d7de; border-radius: 8px;',
-    '  font: inherit; font-size: 13px; line-height: 1.5; color: #24292f;',
-    '  background: #ffffff; outline: none;',
-    '}',
-    '.ac-textarea::placeholder { color: #8c959f; }',
-    '.ac-textarea:focus { border-color: #3b82f6; }',
-    '.ac-footer { display: flex; justify-content: flex-end; margin-top: 8px; }',
+    '.ac-input::placeholder { color: #8b90a4; }',
     '.ac-send {',
-    '  display: inline-flex; align-items: center; gap: 4px;',
-    '  padding: 5px 14px; border: none; border-radius: 7px; cursor: pointer;',
-    '  background: #3b82f6; color: #ffffff; font: inherit; font-size: 13px; font-weight: 500;',
+    '  display: grid; place-items: center;',
+    '  width: 36px; height: 36px; flex: 0 0 auto; padding: 0;',
+    '  border: 0; border-radius: 50%; cursor: pointer;',
+    '  background: #da203f; color: #ffffff;',
     '}',
-    '.ac-send:hover { background: #2f6fe0; }',
-    '.ac-send svg { width: 14px; height: 14px; fill: currentColor; }'
+    '.ac-send:hover { background: #c01c38; }',
+    '.ac-send svg { width: 16px; height: 16px; }'
   ].join('\n')
 
-  /** 发送按钮内的纸飞机图标（内联 SVG，零外部资源） */
+  /** 品牌头像内的 sparkles 图标（lucide，24x24 描边风格，与站内 Dock 头像一致） */
+  var LOGO_ICON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+    ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051' +
+    'a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0' +
+    'l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051' +
+    'a2 2 0 0 0 1.594-1.594zM20 2v4m2-2h-4"/><circle cx="4" cy="20" r="2"/></svg>'
+
+  /** 发送按钮内的上箭头图标（lucide arrow-up，描边风格，与站内胶囊输入条一致） */
   var SEND_ICON =
-    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M.989 8 .066 2.716a.5.5 0 0 1 .727-.528l13.999 7.284a.5.5 0 0 1 0 .885L.793 17.84a.5.5 0 0 1-.727-.528L.99 9.75l7.004-1.75L.989 8Z" transform="scale(0.94)"/></svg>'
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+    ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="m5 12 7-7 7 7M12 19V5"/></svg>'
 
   /**
-   * 挂载 Shadow DOM 并构建界面：品牌行 + 文本输入框 + 发送按钮。
-   * 输入框始终展示，无关闭/收起入口。
+   * 挂载 Shadow DOM 并构建胶囊式输入条：红色圆形 sparkles 头像 + 单行输入 + 红色圆形上箭头发送按钮。
+   * 对齐站内 dock-bottom-bar 视觉；无关闭/收起入口。
    */
   function mount() {
     host = document.createElement('div')
@@ -177,31 +184,26 @@
     root.className = 'ac-dock'
     panel = root
 
-    var brand = document.createElement('div')
+    var brand = document.createElement('span')
     brand.className = 'ac-brand'
-    var logo = document.createElement('span')
-    logo.className = 'ac-logo'
-    brand.appendChild(logo)
-    brand.appendChild(document.createTextNode('AtomCode'))
+    brand.innerHTML = LOGO_ICON
 
-    textarea = document.createElement('textarea')
-    textarea.className = 'ac-textarea'
-    textarea.rows = 3
-    textarea.placeholder = '向 AtomCode 提问，或直接发送阅读本页…'
-    textarea.setAttribute('aria-label', 'AtomCode 输入框')
+    textarea = document.createElement('input')
+    textarea.type = 'text'
+    textarea.className = 'ac-input'
+    textarea.placeholder = '向 AtomCode 提问或描述任务，Enter 发送……'
+    textarea.setAttribute('autocomplete', 'off')
+    textarea.setAttribute('aria-label', '向 AtomCode 提问或描述任务')
 
-    var footer = document.createElement('div')
-    footer.className = 'ac-footer'
     sendBtn = document.createElement('button')
     sendBtn.type = 'button'
     sendBtn.className = 'ac-send'
-    sendBtn.innerHTML = SEND_ICON + '<span>发送</span>'
+    sendBtn.innerHTML = SEND_ICON
     sendBtn.setAttribute('aria-label', '发送到 AtomCode')
-    footer.appendChild(sendBtn)
 
     root.appendChild(brand)
     root.appendChild(textarea)
-    root.appendChild(footer)
+    root.appendChild(sendBtn)
     shadow.appendChild(root)
 
     document.body.appendChild(host)
@@ -241,13 +243,23 @@
       bindContainer(container)
     }
 
+    // 容器矩形：宽度跟随与水平/垂直锚点共用，只取一次
+    var rect = currentContainer ? currentContainer.getBoundingClientRect() : null
+
+    // 宽度跟随正文容器：与三方网页 main 区域等宽；窄屏收窄到视口内
+    //（CSS max-width 兜底），无容器时清空内联回退默认宽 340px
+    if (rect) {
+      dock.style.width = Math.max(Math.min(rect.width, vw - margin * 2), 280) + 'px'
+    } else if (dock.style.width) {
+      dock.style.width = ''
+    }
+
     var dockWidth = dock.offsetWidth || 340
-    var dockHeight = dock.offsetHeight || 120
+    var dockHeight = dock.offsetHeight || 52
 
     // 水平锚点：容器可见区左边（无容器时贴视口左侧）
     var left = margin
-    if (currentContainer) {
-      var rect = currentContainer.getBoundingClientRect()
+    if (rect) {
       left = Math.max(rect.left, 0) + margin
     }
     left = Math.min(Math.max(left, margin), Math.max(margin, vw - dockWidth - margin))
@@ -255,8 +267,8 @@
     // 垂直锚点：容器与视口交集的可见底部（滚出视口的部分不计入）；
     // 无容器或容器滚出视口时回退视口底部。dock 底边贴锚点。
     var anchorBottom = vh - margin
-    if (currentContainer) {
-      var visibleBottom = Math.min(currentContainer.getBoundingClientRect().bottom, vh)
+    if (rect) {
+      var visibleBottom = Math.min(rect.bottom, vh)
       if (visibleBottom > 0) anchorBottom = visibleBottom - margin
     }
     // 约束在视口内：顶边不小于 margin，底边不超过视口底
