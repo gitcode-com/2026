@@ -66,9 +66,10 @@
    */
   var SITE_ADAPTERS = [
     {
-      // 华为开发者空间（CSDN 托管）：文章详情页正文容器为 .article-detail；
-      // 页面为整页滚动（无内部滚动容器），跟随锚点由容器可见底部驱动
-      test: /huaweicloud\.csdn\.net$/,
+      // 华为开发者空间文章页（CSDN 托管，两个入口域：huaweicloud / devpress）：
+      // 正文容器为 .article-detail；页面为整页滚动（无内部滚动容器），
+      // 跟随锚点由容器可见底部驱动
+      test: /(^|\.)(huaweicloud|devpress)\.csdn\.net$/,
       containerSelector: '.article-detail'
     }
   ]
@@ -246,10 +247,11 @@
     // 容器矩形：宽度跟随与水平/垂直锚点共用，只取一次
     var rect = currentContainer ? currentContainer.getBoundingClientRect() : null
 
-    // 宽度跟随正文容器：与三方网页 main 区域等宽；窄屏收窄到视口内
-    //（CSS max-width 兜底），无容器时清空内联回退默认宽 340px
+    // 宽度跟随正文容器：容器宽减去左右各 16px 边距（对称内缩，右缘与容器对齐，
+    // 避免「left=容器左+16 且宽度=容器全宽」导致的右侧溢出偏移）；窄屏收窄到
+    // 视口内（CSS max-width 兜底），无容器时清空内联回退默认宽 340px
     if (rect) {
-      dock.style.width = Math.max(Math.min(rect.width, vw - margin * 2), 280) + 'px'
+      dock.style.width = Math.max(Math.min(rect.width - margin * 2, vw - margin * 2), 280) + 'px'
     } else if (dock.style.width) {
       dock.style.width = ''
     }
@@ -274,8 +276,64 @@
     // 约束在视口内：顶边不小于 margin，底边不超过视口底
     var top = Math.min(Math.max(anchorBottom - dockHeight, margin), vh - margin)
 
+    // 底部遮挡避让：候选区域压到宿主页输入框 / 粘滞底栏时，整体抬升到其上方
+    var occludedTop = findOccludedAnchor({
+      left: left, top: top, width: dockWidth, height: dockHeight
+    })
+    if (occludedTop !== null) {
+      top = Math.max(Math.min(top, occludedTop - margin - dockHeight), margin)
+    }
+
     dock.style.left = left + 'px'
     dock.style.top = top + 'px'
+  }
+
+  /**
+   * 底部遮挡探测：在 Dock 候选矩形内撒点，检查是否与宿主页的
+   * 输入控件（textarea/input/contenteditable）或 sticky/fixed 元素重叠。
+   * 命中时返回需要避让的元素顶部 y 坐标（取最高者），无重叠返回 null。
+   * jsdom 无 elementsFromPoint，直接返回 null（单测不覆盖此路径）。
+   */
+  function findOccludedAnchor(rect) {
+    if (typeof document.elementsFromPoint !== 'function') return null
+    var xs = [rect.left + 24, rect.left + rect.width / 2, rect.left + rect.width - 24]
+    var ys = [rect.top + 8, rect.top + rect.height / 2, rect.top + rect.height - 8]
+    var avoidTop = null
+    for (var i = 0; i < xs.length; i++) {
+      for (var j = 0; j < ys.length; j++) {
+        var stack = document.elementsFromPoint(xs[i], ys[j]) || []
+        for (var k = 0; k < stack.length; k++) {
+          var el = stack[k]
+          if (!el || el.nodeType !== 1) continue
+          // 跳过自身（Shadow DOM 边界拍平后 elementsFromPoint 返回宿主元素）
+          if (el.hasAttribute('data-atomcode-embed-dock')) continue
+          var cs = window.getComputedStyle(el)
+          var isSticky = cs.position === 'sticky' || cs.position === 'fixed'
+          var isInput = /^(TEXTAREA|INPUT|SELECT)$/.test(el.tagName) || el.isContentEditable
+          if (!isInput && !isSticky) continue
+          var b = el.getBoundingClientRect()
+          // 过滤隐藏 / 过小元素，以及与候选矩形无纵向重叠的
+          if (b.width < 40 || b.height < 20) continue
+          if (b.bottom <= rect.top + 4 || b.top >= rect.bottom) continue
+          // 输入控件被 sticky/fixed 祖先包裹时，用祖先顶部（整栏避让）
+          var hitTop = b.top
+          if (!isSticky) {
+            var anc = el.parentElement
+            for (var d = 0; anc && anc !== document.body && d < 6; d++) {
+              var acs = window.getComputedStyle(anc)
+              if (acs.position === 'sticky' || acs.position === 'fixed') {
+                hitTop = anc.getBoundingClientRect().top
+                break
+              }
+              anc = anc.parentElement
+            }
+          }
+          if (avoidTop === null || hitTop < avoidTop) avoidTop = hitTop
+        }
+      }
+      if (avoidTop !== null) break
+    }
+    return avoidTop
   }
 
   /** 请求一次位置重算（rAF 合并同一帧内的多次触发） */
@@ -389,14 +447,12 @@
     // 整页滚动与窗口变化（fixed 元素不随滚动移动，需实时重算）
     window.addEventListener('scroll', schedulePositionUpdate, { passive: true })
     window.addEventListener('resize', schedulePositionUpdate)
-    // 挂载后首帧：等 dock 尺寸渲染完成再定位
-    schedulePositionUpdate()
-  }
-
-  // Node / 单测环境：仅导出纯逻辑（prompt 组装、跳转地址构建），不执行任何浏览器副作用
-  if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { buildPrompt: buildPrompt, buildJumpUrl: buildJumpUrl }
-    return
+    // 后台标签页 rAF 不触发：挂载后同步首算位置（不能只依赖 rAF 排队），
+    // 并在标签页重新可见时重算一次，避免面板停留在初始 top:100vh
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) schedulePositionUpdate()
+    })
+    updatePosition()
   }
 
   start()
