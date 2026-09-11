@@ -63,14 +63,14 @@
   /**
    * 站点专用正文容器适配表：按 hostname 匹配后返回该站点的正文选择器。
    * 优先级介于接入方显式配置与通用 main/article 识别之间。
-   * 注意：华为开发者空间文章页选择器需真实布局验证后再固化，暂以
-   * 通用识别规则兜底（命中不到时自然回退 main/[role=main]/视口）。
    */
   var SITE_ADAPTERS = [
-    // {
-    //   test: /huaweicloud\.csdn\.net$/,
-    //   containerSelector: '.article_content' // 待真实页面验证后启用
-    // }
+    {
+      // 华为开发者空间（CSDN 托管）：文章详情页正文容器为 .article-detail；
+      // 页面为整页滚动（无内部滚动容器），跟随锚点由容器可见底部驱动
+      test: /huaweicloud\.csdn\.net$/,
+      containerSelector: '.article-detail'
+    }
   ]
 
   /**
@@ -102,6 +102,9 @@
   var host = null
   /** Shadow root */
   var shadow = null
+  /** 面板元素（Shadow Root 内的 .ac-dock 根节点；定位/zIndex 统一使用此引用，
+   *  不能用 host.firstElementChild——元素挂在 Shadow Root 里而非 host 直接子节点） */
+  var panel = null
   /** 输入框元素 */
   var textarea = null
   /** 发送按钮元素 */
@@ -172,6 +175,7 @@
 
     var root = document.createElement('div')
     root.className = 'ac-dock'
+    panel = root
 
     var brand = document.createElement('div')
     brand.className = 'ac-brand'
@@ -223,8 +227,8 @@
    */
   function updatePosition() {
     positionScheduled = false
-    if (!host) return
-    var dock = host.firstElementChild
+    if (!panel) return
+    var dock = panel
     if (!dock) return
 
     var margin = 16
@@ -352,9 +356,8 @@
 
     mount()
 
-    // 悬浮层级
-    var dock = host.firstElementChild
-    if (dock && CONFIG.zIndex) dock.style.zIndex = String(CONFIG.zIndex)
+    // 悬浮层级（panel 是 Shadow Root 内的面板元素，fixed 样式挂在它身上）
+    if (panel && CONFIG.zIndex) panel.style.zIndex = String(CONFIG.zIndex)
 
     // 事件：Enter 发送 / Shift+Enter 换行；中文输入法选词期间不触发发送
     textarea.addEventListener('compositionstart', function () {
