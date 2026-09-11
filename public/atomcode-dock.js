@@ -343,10 +343,10 @@
     return target.href
   }
 
-  /** 发送：空输入也允许发送（发送阅读请求）；当前标签页跳转 */
+  /** 发送：空输入也允许发送（发送阅读请求）；新标签页打开（点击/回车属用户手势，不会被弹窗拦截） */
   function handleSend() {
     if (!textarea) return
-    window.location.href = buildJumpUrl(textarea.value)
+    window.open(buildJumpUrl(textarea.value), '_blank')
   }
 
   /* ------------------------------------------------------------------ */
